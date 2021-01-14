@@ -17,6 +17,7 @@ from pyinaturalist.node_api import (
     get_controlled_terms,
     get_geojson_observations,
     get_observation,
+    get_observation_histogram,
     get_observation_identifiers,
     get_observation_observers,
     get_observation_species_counts,
@@ -90,6 +91,21 @@ def test_get_observation(requests_mock):
     assert observation['id'] == 16227955
     assert observation['user']['login'] == 'niconoe'
     assert len(observation['photos']) == 2
+
+
+def test_get_observation_histogram(requests_mock):
+    requests_mock.get(
+        urljoin(INAT_NODE_API_BASE_URL, 'observations/histogram'),
+        json=load_sample_data('get_observation_histogram_month.json'),
+        status_code=200,
+    )
+
+    histogram = get_observation_histogram(
+        interval='month', place_id=24, d1='2020-01-01', d2='2020-12-31'
+    )
+    assert len(histogram) == 12
+    assert histogram[datetime(2020, 1, 1, 0, 0)] == 272
+    assert all([isinstance(k, datetime) for k in histogram.keys()])
 
 
 def test_get_observations(requests_mock):
@@ -445,21 +461,21 @@ def test_get_taxa(requests_mock):
         ({'max_rank': 'species', 'rank': 'override_me'}, SPECIES_AND_LOWER),
     ],
 )
-@patch('pyinaturalist.node_api.make_inaturalist_api_get_call')
+@patch('pyinaturalist.node_api.get')
 def test_get_taxa_by_rank_range(
-    mock_inaturalist_api_get_call,
+    mock_get,
     params,
     expected_ranks,
 ):
     # Make sure custom rank params result in the correct 'rank' param value
     get_taxa(**params)
-    kwargs = mock_inaturalist_api_get_call.call_args[1]
+    kwargs = mock_get.call_args[1]
     requested_rank = kwargs['params']['rank']
     assert requested_rank == expected_ranks
 
 
 # This is just a spot test of a case in which boolean params should be converted
-@patch('pyinaturalist.api_requests.requests.request')
+@patch('pyinaturalist.api_requests.requests.Session.request')
 def test_get_taxa_by_name_and_is_active(request):
     get_taxa(q='Lixus bardanae', is_active=False)
     request_kwargs = request.call_args[1]
